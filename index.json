@@ -1,1 +1,3 @@
-{"schema_version":1,"entries":[]}
+{"schema_version":1,"entries":[
+{"region":"CN","game_build":"9999.12.31.0000.0000","code_sha256":"3564d7271fa081518674ac2fde5794c2d0929a8e894787226d53a491968da84c","match_source":"ANNOUNCEMENT","submitters":1,"first_published_at":"2026-09-16T03:12:38Z","path":"cn/9999.12.31.0000.0000/3564d7271fa0.mrc","commit":"1c71e016e765282cf560ee25fc6d231202918b33","revoked":false}
+]}
