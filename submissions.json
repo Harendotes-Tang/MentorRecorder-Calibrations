@@ -1,4 +1,5 @@
 {"schema_version":1,"submissions":[
 {"region":"CN","game_build":"2026.09.15.0000.0000","account":"id:192693705","code_sha256":"f1efd32d9c83b7808d979d0e730a31bc5cf39e9f5f408c8539f110ba485b600e","submitted_at":"2026-09-17T12:19:20Z","issue":3},
+{"region":"CN","game_build":"2026.09.15.0000.0000","account":"id:95624141","code_sha256":"f3b5c40fda9be2846cca9bb8f74b1c94e0b3a23c9fefc48bb456f9d05110261b","submitted_at":"2026-09-19T16:05:47Z","issue":4},
 {"region":"CN","game_build":"9999.12.31.0000.0000","account":"id:95624141","code_sha256":"3564d7271fa081518674ac2fde5794c2d0929a8e894787226d53a491968da84c","submitted_at":"2026-09-16T03:12:38Z","issue":1}
 ]}

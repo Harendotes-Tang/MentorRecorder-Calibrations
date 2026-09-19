@@ -1,4 +1,5 @@
 {"schema_version":1,"entries":[
 {"region":"CN","game_build":"2026.09.15.0000.0000","code_sha256":"f1efd32d9c83b7808d979d0e730a31bc5cf39e9f5f408c8539f110ba485b600e","match_source":"ANNOUNCEMENT","submitters":1,"first_published_at":"2026-09-17T12:19:20Z","path":"cn/2026.09.15.0000.0000/f1efd32d9c83.mrc","commit":"0087d9c6cc369871f515d6484c33a8a0e0e9c39f","revoked":true},
+{"region":"CN","game_build":"2026.09.15.0000.0000","code_sha256":"f3b5c40fda9be2846cca9bb8f74b1c94e0b3a23c9fefc48bb456f9d05110261b","match_source":"QUEUE_REQUEST","submitters":1,"first_published_at":"2026-09-19T16:05:47Z","path":"cn/2026.09.15.0000.0000/f3b5c40fda9b.mrc","commit":"3557afb5dd94b3a11166aef9821eb4a448194b2d","revoked":false},
 {"region":"CN","game_build":"9999.12.31.0000.0000","code_sha256":"3564d7271fa081518674ac2fde5794c2d0929a8e894787226d53a491968da84c","match_source":"ANNOUNCEMENT","submitters":1,"first_published_at":"2026-09-16T03:12:38Z","path":"cn/9999.12.31.0000.0000/3564d7271fa0.mrc","commit":"1c71e016e765282cf560ee25fc6d231202918b33","revoked":true}
 ]}
