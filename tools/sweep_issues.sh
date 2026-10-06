@@ -5,11 +5,10 @@
 #
 #     bash tools/sweep_issues.sh
 #
-# Why this exists: the workflow uses one concurrency group so two submissions never race on
-# index.json, and GitHub keeps at most ONE pending run per group - a newer pending run cancels the
-# older pending one. During a burst (patch day) some issue runs are therefore cancelled before they
-# start. This sweep publishes every open submission that carries no answer label yet, one at a time,
-# through the same tools/publish_issue.sh.
+# The workflow uses one concurrency group so two submissions never race on index.json, and GitHub
+# keeps at most ONE pending run per group - a newer pending run cancels the older one. During a
+# burst (patch day) some issue runs are therefore cancelled before they start. This sweep publishes
+# every open submission without an answer label, one at a time, through tools/publish_issue.sh.
 #
 # Needs git, python and gh, with GH_TOKEN and GH_REPO set and RUNNER_TEMP pointing at scratch space.
 # Issue text is never read here; tools/publish.py lists the numbers and wraps each issue as an event.

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Share codes (``MRC1.``): decode, encode, canonical form, identity and payload rules.
 
-A port of ``src/Collector/Protocol/Sharing/ShareCode.cs`` and ``ShareCodeRejection.cs``
-(docs/plans/shared-calibration.md section 3.1) for the public calibration repository's GitHub
-Action. The client decodes every downloaded code again, so this module is a gate in front of it,
-never a replacement: it must not accept a code the client refuses, and it names the same rejection
-token for every vector in ``tests/Fixtures/shared-calibration/vectors.json`` (test_sharecode.py).
+A port of ``src/Collector/Protocol/Sharing/ShareCode.cs`` and ``ShareCodeRejection.cs`` for the
+public calibration repository's GitHub Action. The client decodes every downloaded code again, so
+this module is a gate in front of it, never a replacement: it must not accept a code the client
+refuses, and it names the same rejection token for every vector in
+``tests/Fixtures/shared-calibration/vectors.json`` (test_sharecode.py).
 
 Format: ``MRC1.`` + base64url (RFC 4648 section 5, no padding) of a raw DEFLATE stream (RFC 1951)
 holding the payload as canonical JSON. ``code_sha256`` is the SHA-256 of that canonical text, not of
