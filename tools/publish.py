@@ -80,8 +80,8 @@ LABEL_MAINTAINER = "needs-maintainer"
 # Added to a submission and to every issue of the codes it disagrees with (plan section 20.4). Not an
 # answer label: a submission is answered by the label above, and a rival issue was answered long ago.
 LABEL_CONFLICTING = "conflicting"
-ANSWER_LABELS = frozenset({LABEL_PUBLISHED, LABEL_REJECTED, LABEL_MAINTAINER})
-REPORT_LABELS = "%s %s" % (REPORT_LABEL, LABEL_MAINTAINER)
+ANSWER_LABELS = frozenset({LABEL_PUBLISHED, LABEL_REJECTED, LABEL_MAINTAINER, "evidence-waiting"})
+REPORT_LABELS = "%s evidence-waiting" % REPORT_LABEL
 TEMPLATES_DIRECTORY = "templates"
 MAX_PENDING = 50
 MAX_INPUT_BYTES = 16 * 1024 * 1024
@@ -386,8 +386,8 @@ def compose_comment(result: Result) -> str:
 
 # --------------------------------------------------------------------------- a report of a wrong calibration
 
-_REPORT_RECEIVED = "**已收到。维护者核实后会撤回有问题的校准码，或在此说明原因。**"
-_REPORT_OPEN = "本 Issue 保持打开。请不要重复提交；如果还有别的线索，直接在本 Issue 下补充即可。"
+_REPORT_RECEIVED = "**已自动归类为待补结构化证据，普通文字不计票。**"
+_REPORT_OPEN = "本 Issue 保持打开。请在软件中预览并复制最小摘要，使用「共享校准证据」表单提交；系统按固定规则自动处理，不会因文字举报撤回码或冻结账号。"
 _REPORT_ADVICE = "请用「报告校准有误」表单重新提交，不要改动栏目标题；也可以直接在本 Issue 下补齐。本 Issue 保持打开。"
 _REPORT_PROBLEMS = {
     issue_form.BODY_MISSING: "Issue 正文是空的。",

@@ -96,7 +96,7 @@ FIELDS = (
 )
 # Optional entry fields, written after FIELDS and only when an entry carries them: an index written
 # before the field existed stays byte for byte what it was, and a client that predates it ignores it.
-OPTIONAL_FIELDS = ("conflicting", "shape_prior")
+OPTIONAL_FIELDS = ("conflicting", "shape_prior", "quarantined", "quarantine_epoch")
 CONFLICTING = "conflicting"
 SHAPE_PRIOR = "shape_prior"
 LEDGER_FIELDS = ("region", "game_build", "account", "code_sha256", "submitted_at", "issue")
@@ -339,10 +339,13 @@ def read_entry(item: Any) -> tuple[dict | None, str | None]:
         return None, "INVALID:commit"
     if type(item["revoked"]) is not bool:
         return None, "INVALID:revoked"
-    # Optional (plan sections 18.6 and 20.3): an index written before a field existed reads as "no conflict"
-    # and "no comparable earlier build". Either one that is not a JSON boolean skips the entry, as in C#.
+    # Old clients ignore the additional quarantine hints; updated readers require actual JSON booleans
+    # and a nonnegative Int32 epoch. Missing hints retain the legacy unquarantined behavior.
     for name in OPTIONAL_FIELDS:
-        if name in item and type(item[name]) is not bool:
+        if name == "quarantine_epoch":
+            if name in item and (type(item[name]) is not int or not 0 <= item[name] <= _INT32_MAX):
+                return None, "INVALID:" + name
+        elif name in item and type(item[name]) is not bool:
             return None, "INVALID:" + name
     entry = {name: item[name] for name in FIELDS}
     entry.update((name, item[name]) for name in OPTIONAL_FIELDS if name in item)
@@ -943,7 +946,7 @@ def marked_builds(index: Index, region: str, build: str) -> tuple:
 
 def _marked(entry: Mapping, conflicting: bool, shape_prior: bool | None) -> Mapping:
     """The entry with exactly these marks: ``conflicting`` only when True, ``shape_prior`` only when known."""
-    marked = {name: value for name, value in entry.items() if name not in OPTIONAL_FIELDS}
+    marked = {name: value for name, value in entry.items() if name not in ("conflicting", "shape_prior")}
     if conflicting:
         marked[CONFLICTING] = True
     if shape_prior is not None:
