@@ -4,5 +4,6 @@
 {"region":"CN","game_build":"2026.10.06.0000.0000","account":"id:192693705","code_sha256":"bddcef166f905b22a81147635499eb62fcb69922c72aad0cf32a180f399492be","submitted_at":"2026-10-13T12:20:54Z","issue":7,"replaced":["b7ade44e1f1f8afbde729a7b37d5f48443b8f4748a05dd23c424eb363fa3d960"]},
 {"region":"CN","game_build":"2026.10.06.0000.0000","account":"id:95624141","code_sha256":"d2681cfea0d1275b08efee62e5e1272e4a500c3b7f9c1a2a2885c7cc1567cb5b","submitted_at":"2026-10-13T12:52:37Z","issue":9},
 {"region":"CN","game_build":"2026.11.03.0000.0000","account":"id:192693705","code_sha256":"443f49b1cedd3b670dbb60d5aa71c5374642c67bca063c2b22ee73b3afc165af","submitted_at":"2026-11-10T15:12:54Z","issue":12},
+{"region":"CN","game_build":"2026.11.03.0000.0000","account":"id:315430912","code_sha256":"443f49b1cedd3b670dbb60d5aa71c5374642c67bca063c2b22ee73b3afc165af","submitted_at":"2026-11-11T06:39:54Z","issue":13,"basis":"verified"},
 {"region":"CN","game_build":"9999.12.31.0000.0000","account":"id:95624141","code_sha256":"3564d7271fa081518674ac2fde5794c2d0929a8e894787226d53a491968da84c","submitted_at":"2026-09-16T03:12:38Z","issue":1}
 ]}
