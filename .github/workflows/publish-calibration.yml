@@ -11,9 +11,8 @@
 # * The default GITHUB_TOKEN is the only credential: contents: write and issues: write, nothing else.
 # * publish.py prints each result as one line of ASCII JSON, so issue text can never begin a line of
 #   the log and be taken for a workflow command.
-# * Both jobs share one concurrency group (set on the jobs, so an event whose job is skipped never
-#   takes part) and a running job is never cancelled, so two submissions never race on index.json.
-#   A push that still loses a race (a maintainer pushed) is redone from the new main.
+# * All publication writers share a job-level concurrency group and never cancel a running job.
+#   A push that loses a race with an external write is redone from current main.
 # * Every `uses:` is pinned to a commit id, with the release in the trailing comment. A tag can be
 #   moved to another commit, so a mutable reference lets a third-party action change under a job
 #   that holds this repository's token - and everything published here is downloaded by every
@@ -59,7 +58,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.12"
 
@@ -108,7 +107,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.12"
 
