@@ -68,6 +68,9 @@ def snapshot(issue):
 
 def extract(body):
     if not isinstance(body, str) or len(body.encode("utf-8")) > 65536: raise evidence.EvidenceError("ISSUE_BODY_LIMIT")
+    # GitHub's web editor stores an edited body with CRLF line breaks, and editing is how a waiting Issue is
+    # supplemented; read every ending as LF, as issue.parse_body does. JSON strings cannot hold a raw CR or LF.
+    body = body.replace("\r\n", "\n").replace("\r", "\n")
     headings = list(re.finditer(r"^### ([^\r\n]+)\r?$", body, re.M))
     sections = []
     for i, heading in enumerate(headings):
@@ -125,10 +128,21 @@ def disposition(result):
             "candidate": "已归档 CANDIDATE 草案和缺口报告，协议语义尚不完整，保持不支持。",
             "invalid": "摘要未受理，请在软件中重新预览并提交完整的最小摘要。",
             "report": "已自动归类为不计票的待补证据报告。请使用软件的「共享校准证据」生成摘要后新建证据 Issue；普通文字不会撤回校准码或冻结账号。"}[status]
+    # The same verdict in English follows the Chinese one: Global and Traditional Chinese testers
+    # read these replies too, and the verdict is the only part of the intake they ever see.
+    english = {"accepted": "This account's latest valid position on this candidate and criterion is recorded; waiting for new evidence from other independent accounts.",
+               "duplicate": "This summary was already accepted; the retry adds no vote.",
+               "waiting": "The evidence waits automatically: two different, complete and healthy sessions must agree on the same criterion.",
+               "candidate": "A CANDIDATE draft and a gap report were filed; the protocol semantics are still incomplete, so the region stays unsupported.",
+               "invalid": "The summary was not accepted. Preview it again in the app and submit the complete minimal summary.",
+               "report": "Filed automatically as a non-voting evidence report. Use the app's shared calibration evidence feature to generate a summary and open a new evidence issue; plain text never revokes a calibration or freezes an account."}[status]
     if result["reason"] in ("ACCOUNT_CAPACITY_WAIT", "LEDGER_CAPACITY_WAIT", "PUBLIC_INDEX_CAPACITY_WAIT"):
         text = "已达到有界台账的受理容量，暂不新增记录或票数；已有证据与其他账号的额度保持。重试不会删除防重放记录。"
-    return (MARKER + "\n\n" + text + "\n\n原因：`" + result["reason"] + "`。\n\n"
-            "账号与会话数量只是操作门槛，不能证明真实游戏行为或参与者独立；最终仍须本机完整核实。\n")
+        english = "The bounded ledger is at capacity, so no record or vote is added for now; existing evidence and other accounts' quotas are kept. Retrying never deletes the replay guard."
+    return (MARKER + "\n\n" + text + "\n\n" + english + "\n\n原因 / Reason: `" + result["reason"] + "`。\n\n"
+            "账号与会话数量只是操作门槛，不能证明真实游戏行为或参与者独立；最终仍须本机完整核实。\n"
+            "Account and session counts are only an operational threshold; they prove neither real gameplay nor independent participants. "
+            "Ultimately, the app on each player's own computer must still verify every code in full.\n")
 
 
 def reply(repo, number, live, result):
@@ -155,6 +169,10 @@ def reply(repo, number, live, result):
             path = Path(temp) / "comment.md"; path.write_text(body, encoding="utf-8")
             gh("issue", "comment", str(number), "--body-file", str(path))
     if snapshot(api(f"repos/{repo}/issues/{number}")) != snapshot(live): return
+    # A recorded position and an archived candidate are settled: re-reading the same body only repeats
+    # this answer. Closing them (first, as publication does) keeps the sweep on the Issues that can change.
+    if result["status"] in ("accepted", "candidate"):
+        gh("issue", "close", str(number), "--reason", "completed")
     label = {"candidate": "candidate-waiting", "accepted": "evidence-accepted", "invalid": "evidence-invalid"}.get(result["status"], "evidence-waiting")
     existing_labels = {item.get("name") for item in live.get("labels", []) if isinstance(item, dict)}
     stale = sorted((existing_labels & {"candidate-waiting", "evidence-accepted", "evidence-invalid", "evidence-waiting"}) - {label})
@@ -213,6 +231,10 @@ def process(repo, number):
                     result = result["original"]
             except evidence.EvidenceError as error:
                 result = {"status": "waiting" if str(error).endswith("_WAIT") else "invalid", "reason": str(error)}
+        # Every outcome is recorded in the same commit, before the reply: an Issue answered once can never
+        # later take back a summary another Issue was received with (RV4-1). A run that fails before the push
+        # has not replied either, so the Issue's next processing is still its first.
+        evidence.record_answer(state, number)
         try: paths = write_state(state, result, item)
         except evidence.EvidenceError as error:
             if str(error) != "PUBLIC_INDEX_CAPACITY_WAIT": raise
@@ -220,7 +242,11 @@ def process(repo, number):
             # the Issue open and retryable, roll back only our fixed paths, then continue the sweep.
             restore_controlled_file(evidence.LEDGER_FILE)
             run("git", "restore", "--source=origin/main", "--staged", "--worktree", "--", "index.json")
-            paths = []
+            # The answer is still recorded, on the ledger as it was; quarantine hints do not depend on it.
+            state = evidence.load_ledger(Path("."))
+            evidence.record_answer(state, number)
+            atomic(Path(evidence.LEDGER_FILE), evidence.canonical(state) + b"\n")
+            paths = [evidence.LEDGER_FILE]
             result = {"status": "waiting", "reason": "PUBLIC_INDEX_CAPACITY_WAIT"}
         if snapshot(api(f"repos/{repo}/issues/{number}")) != snapshot(live): continue
         if paths: run("git", "add", "--", *paths)

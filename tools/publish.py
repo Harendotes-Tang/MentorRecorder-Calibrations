@@ -16,12 +16,20 @@ Run by tools/publish_issue.sh and tools/sweep_issues.sh, which .github/workflows
   wrap-event     wrap a REST issue object as an event file
   revoke         maintainer: mark a code revoked in index.json, recomputing the marks; every
                  account on it is then held for that region and build until `lift`
+  restore        maintainer: put a revoked code back in use after checking it, recomputing the marks;
+                 for a correct code that a replacement or a mistaken `revoke` took out of use
   remark         maintainer: recompute the marks of every region and build in index.json, or of the ones
                  named with --region and --build, and write the files (a one-off backfill after the marks
                  changed meaning; publication and revocation recompute them on their own)
   lift           maintainer: after review, let one held account submit for that region and build again
   prune          maintainer: take the builds named with --region and --build out, with their entries,
                  ledger rows and code files; prints the plan and changes nothing unless --apply is given
+  evidence lift  maintainer: after review, end one candidate's quarantine in evidence-ledger.json and
+                 rewrite the quarantine hints of index.json from it
+  evidence compact
+                 maintainer: drop the evidence-ledger.json rows no Issue can count again (retired codes,
+                 template observations, older epochs, superseded receipts); prints the counts and changes
+                 nothing unless --apply is given
   report         validate one "report a wrong calibration" issue, for labelling and one reply
 
 ``check`` and ``update-index`` read whether the issue is still open and still unanswered from
@@ -60,6 +68,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Iterator
 
+import evidence
 import index as repo_index
 import issue as issue_form
 import rebuild
@@ -122,7 +131,7 @@ UNEXPECTED_STATUS = "UNEXPECTED_STATUS"
 CODE_FILE_MISSING = "CODE_FILE_MISSING"
 
 _LOGIN = re.compile(r"[A-Za-z0-9-]{1,39}")
-_CODE_PATH = re.compile(r"(?:cn|global)/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/[0-9a-f]{12}\.mrc")
+_CODE_PATH = re.compile(r"(?:cn|global|tc)/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/[0-9a-f]{12}\.mrc")
 _COMMIT_MESSAGE = re.compile(r"[A-Za-z0-9 ._:#()/-]{1,200}")
 _ISSUE_NUMBER = re.compile(r"[1-9][0-9]{0,9}")
 _ECHOED_DETAILS = frozenset({sharecode.E_UNKNOWN_KEY, sharecode.E_DUPLICATE_KEY})
@@ -151,7 +160,8 @@ _FORM_PROBLEMS_WITH_ADVICE = frozenset({issue_form.BASIS_INVALID})
 _REFUSALS = {
     repo_index.ACCOUNT_TOO_NEW: "提交校准码的 GitHub 账号需要注册满 30 天，这个账号还不满 30 天。满 30 天后可以重新提交，"
                                 "也可以把校准码交给注册满 30 天的玩家代为提交。",
-    repo_index.REVOKED: "完全相同的校准码之前发布过，但已被维护者撤销，不再发布。",
+    repo_index.REVOKED: "完全相同的校准码之前发布过，但已被撤回（由维护者撤销，或其提交者已用另一份替换），不再自动发布。"
+                        "如果你确认这一份是正确的，请在本 Issue 下留言说明，维护者核实后可以恢复它。",
     repo_index.PAYLOAD_MISMATCH: "校准码里的客户端版本号无法作为仓库目录名（需要以字母或数字开头），因此无法发布。",
     repo_index.BUILD_NOT_INDEXABLE: "校准码里的客户端版本号不是游戏客户端的版本号格式（形如 2026.09.01.0000.0000），因此无法发布。",
     repo_index.BUILD_IN_FUTURE: "校准码里的客户端版本号所含的日期晚于提交日（按 UTC 计算）的次日，不是已经发布的游戏客户端版本，"
@@ -394,7 +404,7 @@ _REPORT_PROBLEMS = {
     issue_form.BODY_TOO_LARGE: "Issue 正文太长，不是表单填出来的。",
     issue_form.REPORT_REGION_MISSING: "没有在「区服」栏目读到内容。",
     issue_form.REPORT_REGION_AMBIGUOUS: "正文里有不止一个「区服」栏目。",
-    issue_form.REPORT_REGION_INVALID: "「区服」栏目的内容不是表单里的选项（CN 或 GLOBAL）。",
+    issue_form.REPORT_REGION_INVALID: "「区服」栏目的内容不是表单里的选项（CN、TC 或 GLOBAL）。",
     issue_form.REPORT_BUILD_MISSING: "没有在「游戏版本」栏目读到内容。",
     issue_form.REPORT_BUILD_AMBIGUOUS: "正文里有不止一个「游戏版本」栏目。",
     issue_form.REPORT_BUILD_INVALID: "「游戏版本」栏目里的不是一个客户端版本号（形如 2026.09.01.0000.0000）。",
@@ -1008,7 +1018,7 @@ def command_remark(args: argparse.Namespace) -> int:
     """
     regions, builds = args.region or [], args.build or []
     if len(regions) != len(builds):
-        raise UsageError("name every build with its region: --region <CN|GLOBAL> --build <build>, repeated")
+        raise UsageError("name every build with its region: --region <CN|TC|GLOBAL> --build <build>, repeated")
     repo = Path(args.repo)
     state = repo_index.load(repo)
     listed = sorted({(entry["region"], entry["game_build"]) for entry in state.entries})
@@ -1054,6 +1064,24 @@ def _remark_after_prune(repo: Path, pruned: repo_index.Index, region: str, remov
     return pruned
 
 
+def command_restore(args: argparse.Namespace) -> int:
+    repo = Path(args.repo)
+    state = repo_index.load(repo)
+    entry = next((entry for entry in state.entries if entry["code_sha256"] == args.code_sha256), None)
+    if entry is None:
+        raise UsageError("index.json does not list that code")
+    # A revoked code's file name may have been taken over since; what is restored must be this code.
+    if repo_index.code_payload(repo, entry) is None:
+        raise UsageError("the code file at %s is missing or is no longer that code" % entry["path"])
+    try:
+        updated = repo_index.restore(state, args.code_sha256)
+    except ValueError as error:
+        raise UsageError("another code in use holds the same file name") from error
+    repo_index.write_files(repo, _with_marks(repo, updated, entry["region"], entry["game_build"]))
+    print(json.dumps({"restored": args.code_sha256}))
+    return 0
+
+
 def command_lift(args: argparse.Namespace) -> int:
     repo = Path(args.repo)
     state = repo_index.load(repo)
@@ -1088,13 +1116,58 @@ def command_prune(args: argparse.Namespace) -> int:
     if not args.apply:
         return 0
     repo_index.write_files(repo, _remark_after_prune(repo, pruned, args.region, removed))
-    # The paths come from entries read_index accepted, so each is <cn|global>/<build>/<12 hex>.mrc and
+    # The paths come from entries read_index accepted, so each is <cn|tc|global>/<build>/<12 hex>.mrc and
     # stays inside the checkout. Git history keeps every file, and clients download codes by commit.
     for relative in gone:
         (repo / relative).unlink(missing_ok=True)
     for directory in sorted({(repo / relative).parent for relative in gone}):
         if directory.is_dir() and not any(directory.iterdir()):
             directory.rmdir()
+    return 0
+
+
+def _load_evidence(repo: Path) -> dict:
+    try:
+        return evidence.load_ledger(repo)
+    except evidence.EvidenceError as error:
+        raise UsageError("evidence-ledger.json does not load (%s); nothing was written" % error) from error
+
+
+def _write_evidence(repo: Path, ledger: dict) -> None:
+    """Writes the evidence ledger and index.json with the quarantine hints derived from it, as the evidence
+    workflow does. The index is checked first, so an index that would be refused leaves both files as they were."""
+    state = repo_index.load(repo)
+    files = repo_index.dump(replace(state, entries=evidence.apply_hints(state.entries, ledger)))
+    (repo / evidence.LEDGER_FILE).write_bytes(evidence.canonical(ledger) + b"\n")
+    for name, data in files.items():
+        (repo / name).write_bytes(data)
+
+
+def command_evidence_lift(args: argparse.Namespace) -> int:
+    if not repo_index.is_sha256(args.candidate):
+        raise UsageError("name the candidate by its 64-hex key under \"candidates\" in evidence-ledger.json")
+    repo = Path(args.repo)
+    try:
+        lifted, fields = evidence.lift(_load_evidence(repo), args.candidate)
+    except KeyError as error:
+        raise UsageError("evidence-ledger.json holds no quarantined candidate %s; nothing was written" % args.candidate) from error
+    _write_evidence(repo, lifted)
+    scope = lifted["candidates"][args.candidate]["scope"]
+    print(json.dumps({"lifted": args.candidate, "fields": fields, "region": scope["region"],
+                      "game_build": scope["game_build"], "code_sha256": scope["code_sha256"]}))
+    return 0
+
+
+def command_evidence_compact(args: argparse.Namespace) -> int:
+    repo = Path(args.repo)
+    ledger = _load_evidence(repo)
+    live = {(entry["region"], entry["game_build"], entry["code_sha256"])
+            for entry in repo_index.load(repo).entries if not entry["revoked"]}
+    compacted, removed = evidence.compact(ledger, live)
+    # The counts are printed first, and without --apply they are all that happens.
+    print(json.dumps({"applied": args.apply, "removed": removed}))
+    if args.apply and compacted != ledger:
+        _write_evidence(repo, compacted)
     return 0
 
 
@@ -1159,9 +1232,14 @@ def _parser() -> argparse.ArgumentParser:
     revoke.add_argument("--code-sha256", required=True)
     revoke.set_defaults(run=command_revoke)
 
+    restore = commands.add_parser("restore")
+    restore.add_argument("--repo", required=True)
+    restore.add_argument("--code-sha256", required=True)
+    restore.set_defaults(run=command_restore)
+
     remark = commands.add_parser("remark")
     remark.add_argument("--repo", required=True)
-    remark.add_argument("--region", action="append", choices=("CN", "GLOBAL"),
+    remark.add_argument("--region", action="append", choices=("CN", "GLOBAL", "TC"),
                         help="the region of a build to recompute; repeatable, each with its --build")
     remark.add_argument("--build", action="append",
                         help="a client build to recompute; repeatable; default: every build index.json lists")
@@ -1170,18 +1248,29 @@ def _parser() -> argparse.ArgumentParser:
     lift = commands.add_parser("lift")
     lift.add_argument("--repo", required=True)
     lift.add_argument("--account", required=True, help="the account as submissions.json names it: id:<number>")
-    lift.add_argument("--region", required=True, help="CN or GLOBAL")
+    lift.add_argument("--region", required=True, help="CN, TC or GLOBAL")
     lift.add_argument("--build", required=True, help="the client build the hold is for")
     lift.set_defaults(run=command_lift)
 
     prune = commands.add_parser("prune")
     prune.add_argument("--repo", required=True)
-    prune.add_argument("--region", required=True, choices=("CN", "GLOBAL"), help="the region the builds belong to")
+    prune.add_argument("--region", required=True, choices=("CN", "GLOBAL", "TC"), help="the region the builds belong to")
     prune.add_argument("--build", required=True, action="append",
                        help="a client build to take out, with its entries, ledger rows and code files; repeatable")
     prune.add_argument("--apply", action="store_true",
                        help="write the change; without it, only print what would be removed")
     prune.set_defaults(run=command_prune)
+
+    evidence_commands = commands.add_parser("evidence").add_subparsers(dest="evidence_command", required=True)
+    evidence_lift = evidence_commands.add_parser("lift")
+    evidence_lift.add_argument("--repo", required=True)
+    evidence_lift.add_argument("candidate", help="the candidate's 64-hex key under \"candidates\" in evidence-ledger.json")
+    evidence_lift.set_defaults(run=command_evidence_lift)
+    evidence_compact = evidence_commands.add_parser("compact")
+    evidence_compact.add_argument("--repo", required=True)
+    evidence_compact.add_argument("--apply", action="store_true",
+                                  help="write the change; without it, only print how many rows would be removed")
+    evidence_compact.set_defaults(run=command_evidence_compact)
     return parser
 
 

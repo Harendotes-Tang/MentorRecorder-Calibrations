@@ -1,5 +1,7 @@
 # MentorRecorder Shared Calibrations
 
+Traditional Chinese (`TC`) is a separate region and shares no calibration codes with the Chinese or Global regions. It has no verified bundled protocol template yet, so this repository cannot publish TC codes for now; template observations from TC are only archived as candidate drafts.
+
 [简体中文](README.md) | [繁體中文](README.zh-TW.md) | [English](README.en.md) | [日本語](README.ja.md)
 
 This repository stores **shared calibration codes** contributed by players using MentorRecorder.
@@ -22,16 +24,16 @@ The updated repository retains `schema_version: 1` in `index.json`, the `MRC1.` 
 Older clients that already support shared calibrations, including the released `v1.7.2`, can continue reading the index and downloading and verifying codes that match their region, game version, and bundled template.
 Earlier clients without shared calibration support do not gain that capability from a repository update. A mismatched template or unsupported game version is still rejected under the existing rules.
 
-| Capability | Older clients with shared calibration support | Clients supporting the new evidence workflow |
+| Capability | Older clients with shared calibration support (`v1.7.2` and earlier) | Clients supporting the evidence workflow (`v1.7.3` and later) |
 |---|---|---|
 | Read existing index fields and `MRC1.` calibration codes | Remains compatible | Supported |
 | Submit calibration codes through the original form | Remains compatible | Supported |
 | Enforce reversible quarantine and full-verification requirements | Ignore `quarantined` / `quarantine_epoch` and follow their existing rules | Enforce the new requirements while retaining profiles already fully verified locally |
-| Preview and submit minimal evidence; guided observation for regions without templates | No new entry point | Requires matching updates to both the client and capture service |
+| Preview and submit minimal evidence; guided observation for regions without templates | No new entry point | Supported |
 | Automatically support a new region without an official template | Unsupported | Also unsupported; candidate observations must be collected first |
 
 **Read compatibility does not mean the new rules take effect in older software.** Automatic quarantine is not disguised as permanent `revoked` status to force older software to stop using a code.
-The evidence feature has been implemented in source code but has not yet been released in a software installer. Updating this repository or reading this README does not add new entry points or quarantine requirements to an installed client.
+The evidence entry points and quarantine requirements ship in the software installer from `v1.7.3`. Updating this repository alone adds no new entry points or quarantine requirements to installed clients of `v1.7.2` or earlier.
 
 ## How the App Uses This Repository
 
@@ -51,7 +53,7 @@ A calibration code consists of `MRC1.` followed by compressed, canonical JSON.
 
 | Included | Not included |
 |---|---|
-| Format version, region (`CN` / `GLOBAL`), and game client version | Character name, server, account, or IP address |
+| Format version, region (`CN` / `TC` / `GLOBAL`), and game client version | Character name, server, account, or IP address |
 | ID and hash of the bundled template used | Timestamps, sample counts, or which random duties were queued |
 | Match-detection method and the message lengths, byte offsets, or state values it requires | Descriptions, file paths, or any message payload |
 | The learned message numbers for match prompts, zone changes, duties, and jobs | |
@@ -138,11 +140,15 @@ and explicitly submit it. The repository validates and deduplicates it, records 
 
 **Counts and format checks are operational thresholds. They cannot prove that a submitter played the game, that the content is truthful, or that accounts are independent.** The app ultimately still relies on full local verification.
 Older software ignores quarantine fields and continues using its existing local rules; updating this repository alone adds no new requirements to old software.
-All repository writes share a publication concurrency lock, and push conflicts are recalculated from the latest `main`. Automatic replies use one bot comment per Issue, updating it on retries instead of adding duplicates.
+Publication and evidence each have their own concurrency lock (reports share the evidence lock), so evidence and report Issues that stay open cannot hold up publication; push conflicts are recalculated from the latest `main`. Automatic replies use one bot comment per Issue, updating it on retries instead of adding duplicates.
 A scheduled sweep uses a persistent cursor to process missed events in batches. The ledger has capacity limits and waits when full; replay-prevention records are not deleted to make old evidence appear new.
 Current global limits are 4096 summaries, 32768 session aliases, and 16384 latest field positions, with a ledger no larger than 8 MiB, plus up to 4096 receipts for ordinary text reports.
 Each account is limited to 128 summaries, 1024 session aliases, and 64 text reports. Exceeding these limits returns `ACCOUNT_CAPACITY_WAIT` without allocating a new record, freezing the account, or changing existing votes.
 Exhausted global capacity returns `LEDGER_CAPACITY_WAIT`. Unlimited history or further acceptance after capacity is reached is not guaranteed; replay-prevention records are not automatically discarded to free space.
+A maintainer can free space with `publish.py evidence compact`, which deletes only records that can never count again; see “Maintaining the Evidence Ledger”.
+When a summary or its sessions are copied and submitted by another account, they belong to the Issue received first; the other copy adds no votes. The only exception: when a copy in a later-created Issue (higher number) is received first while the earlier-created Issue has not yet had any reply, the earlier Issue takes them back when it is first processed and the copy's votes are voided. An Issue that has already had a reply and is later edited to carry someone else's summary adds no votes.
+When a `v1.7.3` client uses one session alias for several candidates in one capture, that session counts only for the candidate that was received first; summaries for the other candidates are still accepted.
+Evidence Issues whose position has been recorded and Issues whose candidate draft has been archived are closed automatically after the reply. Issues that are still waiting or were not accepted stay open and can be edited to add or correct evidence.
 
 ### How the App Handles Disagreements
 
@@ -187,6 +193,7 @@ The script modifies local files. Review the changes to `index.json` and other fi
 Do not edit only `conflicting` or `submitters` to manufacture a resolution; subsequent publication and recalculation regenerate them.
 
 `remark` only recalculates flags. It does not decide correctness or revoke codes. `lift` only removes an account's submission suspension for a specified region and version; it does not restore a revoked code.
+`evidence lift` only ends one candidate's automatic quarantine; it neither revokes nor restores any code (see “Maintaining the Evidence Ledger”).
 Players who need a correction should share a new, correct code. Index refresh intervals and download caches affect when clients learn about revocation; running a maintenance command does not immediately change every machine.
 
 ## Reporting an Incorrect Calibration
@@ -223,7 +230,7 @@ Download sources are cached: changes appear on `raw.githubusercontent.com` withi
 Accounts that submitted a revoked code have submissions suspended for that region and game client version. When the Action rejects a submission, it asks the submitter to explain the situation in the Issue. After review, a maintainer can run:
 
 ```bash
-python tools/publish.py lift --repo . --account id:<numeric-id> --region <CN-or-GLOBAL> --build <game-client-version>
+python tools/publish.py lift --repo . --account id:<numeric-id> --region <CN-or-TC-or-GLOBAL> --build <game-client-version>
 ```
 
 The account can then submit again, but the revoked code itself will never be republished. Another code may reuse the filename—the first 12 characters of the identifier—previously occupied by a revoked code.
@@ -231,7 +238,7 @@ The account can then submit again, but the revoked code itself will never be rep
 After flag rules change, maintainers can recalculate both flags for all versions or specified versions to backfill existing entries:
 
 ```bash
-python tools/publish.py remark --repo . [--region <CN-or-GLOBAL> --build <game-client-version> …]
+python tools/publish.py remark --repo . [--region <CN-or-TC-or-GLOBAL> --build <game-client-version> …]
 ```
 
 Without a version filter, all regions and versions in the index are recalculated. The command prints one JSON line listing the recalculated versions, the number of changed entries, and versions written without flags because of the index size limit.
@@ -242,13 +249,34 @@ If a specified version is absent from the index, no files are changed.
 The index has a size limit, and submissions do not delete entries. Maintainers can explicitly select game client versions to remove:
 
 ```bash
-python tools/publish.py prune --repo . --region <CN-or-GLOBAL> --build <game-client-version> [--build <game-client-version> …]
+python tools/publish.py prune --repo . --region <CN-or-TC-or-GLOBAL> --build <game-client-version> [--build <game-client-version> …]
 ```
 
 Without `--apply`, the command only lists the versions, entry counts, submission-ledger record counts, and code files that would be removed; it changes no files. Add `--apply` after checking the preview.
 The selected versions, their entries, submission-ledger records, and code files are removed together. Original files remain in commit history. Both flags for later versions in the same region are recalculated
 without using the removed versions as a basis.
 The script does not choose which versions to retain by date because version numbers are supplied by submitters, and versions dated today are accepted. Remove only old versions that no players still use.
+
+## Maintaining the Evidence Ledger
+
+Automatic quarantine ends on its own once enough new positive evidence arrives. After review, a maintainer can also end it manually in an up-to-date local copy of this repository:
+
+```bash
+python tools/publish.py evidence lift --repo . <candidate ID>
+```
+
+The candidate ID is the 64-hex key under `candidates` in `evidence-ledger.json`; its `scope` names the region, version, and code ID.
+The command clears the candidate's quarantine reasons and marks the old negative votes that caused them as consumed, so only newly received evidence can quarantine it again. The quarantine hints in `index.json` are rewritten from the ledger.
+
+When the ledger reaches capacity, records that can never count again can be deleted:
+
+```bash
+python tools/publish.py evidence compact --repo . [--apply]
+```
+
+It deletes all evidence records of revoked or pruned codes, session records of template observations, session records from an epoch older than their candidate's current one, receipts superseded by a later summary in the same Issue,
+and Issue records left without a receipt. Receipts for ordinary reports are kept. Without `--apply`, it only prints how many records of each kind would be deleted and changes no files.
+Both commands change only local files; they take effect after you review the differences, commit, and push to `main`.
 
 ## Repository Layout
 
@@ -258,6 +286,7 @@ The script does not choose which versions to retain by date because version numb
 | `submissions.json` | Submission ledger: which account (numeric ID) submitted which code for which version, whether it followed successful verification (`basis`), and the previous code it replaced; not downloaded by the app |
 | `cn/<game-client-version>/<first-12-identifier-characters>.mrc` | Chinese-region code text, downloaded by the app at the commit that added it |
 | `global/<game-client-version>/<first-12-identifier-characters>.mrc` | Global-region code text |
+| `tc/<game-client-version>/<first-12-identifier-characters>.mrc` | Traditional Chinese-region code text |
 | `templates/<template-id>.json` | Byte-for-byte copies of the app's bundled templates, used by the Action for structural reconstruction and validation |
 | `tools/` | Validation and publication scripts copied from the main MentorRecorder repository; do not edit them manually here |
 | `.github/ISSUE_TEMPLATE/share-calibration.yml` | Submission form |
@@ -266,6 +295,7 @@ The script does not choose which versions to retain by date because version numb
 | `.github/workflows/report-calibration.yml` | Automatic waiting status for ordinary reports, instructions to provide evidence, and persistent prevention of duplicate replies |
 | `.github/ISSUE_TEMPLATE/evidence-calibration.yml`, `template-observation.yml` | Forms for minimal public summaries after preview |
 | `.github/workflows/evidence-calibration.yml` | Automatic evidence intake, quarantine and recovery, candidate archiving, and scheduled catch-up processing |
+| `.github/workflows/mirror-repository.yml` | Synchronizes branches and tags to the GitCode mirror on push, every 30 minutes, and after every run of the publication, evidence, and report workflows |
 | `evidence-ledger.json`, `evidence-sweep.json` | Bounded evidence replay prevention, latest account positions, epoch reasons, and catch-up cursor; not downloaded by clients |
 | `schemas/`, `candidates/` | Copy of the sole evidence format and unsupported candidate drafts |
 | `LICENSE.md`, `LICENSES/` | Licenses |
@@ -274,7 +304,7 @@ The script does not choose which versions to retain by date because version numb
 
 - `submissions.json` records the submitting account's numeric GitHub ID, the selected source (`basis` is recorded only for successful verification), and checksums of that account's previously replaced codes. These are used only to enforce account-based acceptance rules—one active code per account and version, submission and daily limits, and suspension after revocation—and to find the other Issue when explaining a conflict. The ID and source are already public in the corresponding Issue.
   The app does not download this file, and `index.json` contains no account information.
-- The Action uses only GitHub's default `GITHUB_TOKEN`; no other secrets are required.
+- The Actions that process Issues use only GitHub's default `GITHUB_TOKEN`. Only the workflow that synchronizes this repository to the GitCode mirror uses one more repository secret, `GITCODE_MIRROR_TOKEN`; it checks out only trusted `main` and reads no Issue content.
 - Preview the allowlisted summary before submission. A public Issue also exposes the account and GitHub submission time. Its body, summary hash, random session aliases, and numeric-account ledger may remain in history and mirrors.
   The repository does not request characters, IP addresses, raw messages, device identifiers, or precise gameplay timelines. Deleting an Issue is not guaranteed to remove every historical copy.
 
