@@ -9,6 +9,8 @@ MentorRecorder can read this directory without signing in to GitHub. Use **Publi
 3. Submit with your GitHub account from the app, or copy the complete structured block into the **Share a mentor reminder or macro** Issue form. The Issue and content are public.
 4. Check the Issue for its processing result. Community submissions have not been verified for gameplay accuracy. A maintainer can independently review an item through the community workflow.
 
+The same text is published once. An item whose body matches a live item of the same type (after unifying line breaks and dropping spaces at line ends and blank lines at either end) is left out, the rest of the submission is published, and the receipt names the published item to import instead; links to a left-out new item point at the published one. An author's edit whose new text repeats another item keeps the published version. A submission that publishes nothing new and keeps nothing unchanged is labelled `community-duplicate`. Text that reads almost the same (a Dice coefficient of at least 0.9 over neighbouring characters, after NFKC normalization, dropping sound cues and spacing, and lower-casing) is published, listed in the receipt and labelled `community-similar` with the first receipt; a maintainer may remove that label once reviewed.
+
 The stable ID stays unchanged when the author edits a title. For an update from a new Issue, refresh the public library before previewing the submission. For an adaptation, start from a separate ID and keep the original source and license. Closing an unprocessed Issue prevents its publication. For a published item, request a withdrawal or status correction from a maintainer. Imported notes remain with their users.
 
 ## Publication
